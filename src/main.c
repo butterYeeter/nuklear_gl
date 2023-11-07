@@ -24,7 +24,7 @@ GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
 
     GLint compile_status;
     glGetShaderiv(shader_id, GL_COMPILE_STATUS, &compile_status);
-    assert(status == GL_TRUE);
+    assert(compile_status == GL_TRUE);
 
     return shader_id;
 }
@@ -53,7 +53,7 @@ int main() {
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), NULL);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)2*sizeof(float));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(2*sizeof(float)));
     glEnableVertexAttribArray(1);
 
     GLuint program, vert_shader, frag_shader;
