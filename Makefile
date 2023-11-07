@@ -1,6 +1,5 @@
-RPATH = -Wl,-rpath,$(ORIGIN)/../lib
 INCLUDE = -L./lib
-LIBS = -lglad -lglfw3 -lcglm
+LIBS = -lglad -lglfw3 -lcglm -lm
 
-build/main: src/main.c
-	gcc -o $@ $? $(RPATH) $(INCLUDE) $(LIBS)
+bin/main: src/main.c
+	gcc -o $@ $? $(INCLUDE) $(LIBS)
