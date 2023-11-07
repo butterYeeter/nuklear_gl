@@ -1,6 +1,7 @@
 #include "../include/glad/glad.h"
 #include "../include/GLFW/glfw3.h"
 #include <assert.h>
+#include <complex.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -22,9 +23,14 @@ GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
     glCompileShader(shader_id);
     free(shader_src);
 
-    GLint compile_status;
-    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &compile_status);
-    assert(compile_status == GL_TRUE);
+    GLint ret;
+    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &ret);
+    if(ret != GL_TRUE) {
+        glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &ret);
+        char log[ret];
+        glGetShaderInfoLog(shader_id, ret, NULL, log);
+        printf("%s\n", log);
+    }
 
     return shader_id;
 }
