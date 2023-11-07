@@ -19,9 +19,8 @@ GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
     fclose(shader_file);
 
     GLuint shader_id = glCreateShader(shader_type);
-    glShaderSource(shader_id, 1, &shader_src, NULL);
+    glShaderSource(shader_id, 1, &shader_src, &file_size);
     glCompileShader(shader_id);
-    free(shader_src);
 
     GLint ret;
     glGetShaderiv(shader_id, GL_COMPILE_STATUS, &ret);
@@ -29,9 +28,18 @@ GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
         glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &ret);
         char log[ret];
         glGetShaderInfoLog(shader_id, ret, NULL, log);
-        printf("%s\n", log);
+        
+        switch(shader_type) {
+            case GL_VERTEX_SHADER:
+                printf("================\nVertex Shader log:\n================\n%s\n", log);
+                break;
+            case GL_FRAGMENT_SHADER:
+                printf("================\nFrag Shader log:\n================\n%s\n", log);
+                break;
+        }
     }
 
+    free(shader_src);
     return shader_id;
 }
 
@@ -70,9 +78,15 @@ int main() {
     glAttachShader(program, frag_shader);
     glLinkProgram(program);
 
-    GLint link_status;
-    glGetProgramiv(program, GL_LINK_STATUS, &link_status);
-    assert(link_status == GL_TRUE);
+    GLint ret;
+    glGetProgramiv(program, GL_LINK_STATUS, &ret);
+    if(ret != GL_TRUE) {
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &ret);
+        char log[ret];
+        glGetProgramInfoLog(program, ret, NULL, log);
+        printf("%s\n", log);
+        return 2;
+    }
 
     glUseProgram(program);
 
