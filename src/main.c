@@ -6,27 +6,37 @@
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdarg.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../include/stb_image.h"
 
+
 #define NK_INCLUDE_FIXED_TYPES
-#define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_STANDARD_IO
-#define NK_INCLUDE_STANDARD_BOOL
+#define NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
-#define NK_INCLUDE_FONK_BAKING
+#define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
-#define NK_UINT_DRAW_INDEX
 #define NK_IMPLEMENTATION
-#include "../include/nuklear.h"
+#include <nuklear.h>
 
+typedef int Bool;
+#define TRUE 1
+#define FALSE 0
 
-// typedef struct {
-//     GLuint id;
-//     unsigned int *pnames;
-//     unsigned int *params;
-// } Texture;
+typedef struct {
+    unsigned char *image_data;
+    int width;
+    int height;
+    int nchannels;
+} Image;
+
+typedef struct {
+    GLuint ID;
+    Image img;
+} Texture;
 
 int resolution[] = {800, 800};
 
@@ -89,6 +99,49 @@ void upload_uniform1f(const GLuint program, const char *name, const float v0) {
     printf("val: %f\n", res);
 }
 
+void texture_load_image(Texture *texture, const char *img_path) {
+    stbi_set_flip_vertically_on_load(true);
+    texture->img.image_data = stbi_load(img_path, &(texture->img.width), &(texture->img.height), &(texture->img.nchannels), 0);
+}
+
+
+void texture_create(Texture *texture, Bool gen_mipmap, ...) {
+    va_list ptr;
+    va_start(ptr, gen_mipmap);
+    int filter = GL_LINEAR;
+    if(gen_mipmap) {
+        filter = va_arg(ptr, int);
+    } 
+    va_end(ptr);
+    
+    
+    glGenTextures(1, &texture->ID);
+    glBindTexture(GL_TEXTURE_2D, texture->ID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    int format;
+    printf("%d\n", texture->img.nchannels);
+    switch(texture->img.nchannels) {
+        case 4:
+            format = GL_RGBA;
+            break;
+        case 3:
+            format = GL_RGB;
+            break;
+    }
+
+    glTexImage2D(GL_TEXTURE_2D, 0, format, texture->img.width, texture->img.height, 0, format, GL_UNSIGNED_BYTE, texture->img.image_data);
+    if(gen_mipmap) glGenerateMipmap(GL_TEXTURE_2D);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void texture_image_free(Texture *texture) {
+    stbi_image_free(texture->img.image_data);
+}
 
 int main(int argc, char **argv) {
     char cwd[512];
@@ -162,25 +215,33 @@ int main(int argc, char **argv) {
     glUseProgram(shader_program);
 
 
-    int w, h, n;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char *data = stbi_load("res/dice.png", &w, &h, &n, 0);
-    unsigned int format;
-    (n == 4) ? format = GL_RGBA : (n==3) ? format = GL_RGB : (format);
 
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    stbi_image_free(data);
+    Texture tex;
+    Image image;
+    struct nk_font_atlas atlas;
+    struct nk_draw_null_texture tex_null;
+    nk_font_atlas_init_default(&atlas);
+    nk_font_atlas_begin(&atlas);
+    struct nk_font *font = nk_font_atlas_add_from_file(&atlas, "res/unispace.ttf", 16, 0);
+    image.image_data = (unsigned char*) nk_font_atlas_bake(&atlas, &image.width, &image.height, NK_FONT_ATLAS_RGBA32);
+    image.nchannels = 4;
+    tex.img = image;
+    texture_create(&tex, FALSE, GL_LINEAR);
+    nk_font_atlas_end(&atlas, nk_handle_id((int)tex.ID), &tex_null);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex.ID);
+
+    struct nk_context ctx;
+    if(!nk_init_default(&ctx, &font->handle)) {
+        printf("Failed to initialize nk context!\n");
+        nk_font_atlas_clear(&atlas);
+        glfwTerminate();
+        return 2;
+    }
 
 
-    float last_time = glfwGetTime();
+
     while(!glfwWindowShouldClose(window)) {
         // upload_uniform2i(shader_program, "res", resolution[0], resolution[1]);
         glClearColor(0.0f, 0.2f, 0.2f, 1.0f);
@@ -202,8 +263,14 @@ int main(int argc, char **argv) {
             resolution[1] = height;
             // printf("resolution changed!\n");
         }
+
+        nk_clear(&ctx);
     }
 
+    
+    nk_font_atlas_cleanup(&atlas);
+    nk_font_atlas_clear(&atlas);
+    nk_free(&ctx);
     glfwTerminate();
     return 0;
 }
