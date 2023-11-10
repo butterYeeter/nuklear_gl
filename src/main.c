@@ -38,6 +38,13 @@ typedef struct {
     Image img;
 } Texture;
 
+typedef struct {
+    float pos[2]; // important to keep it to 2 floats
+    float uv[2];
+    unsigned char col[4];
+} Vertex;
+
+
 int resolution[] = {800, 800};
 
 GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
@@ -220,26 +227,33 @@ int main(int argc, char **argv) {
     Image image;
     struct nk_font_atlas atlas;
     struct nk_draw_null_texture tex_null;
+    struct nk_font *font;
+    struct nk_context ctx;
+    struct nk_convert_config cfg = {};
+    static const struct nk_draw_vertex_layout_element vertex_layout[] = {
+        {NK_VERTEX_POSITION, NK_FORMAT_FLOAT, NK_OFFSETOF(Vertex, pos)},
+        {NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT, NK_OFFSETOF(Vertex, uv)},
+        {NK_VERTEX_COLOR, NK_FORMAT_R8G8B8A8, NK_OFFSETOF(Vertex, col)},
+        {NK_VERTEX_LAYOUT_END}
+    };
+
     nk_font_atlas_init_default(&atlas);
     nk_font_atlas_begin(&atlas);
-    struct nk_font *font = nk_font_atlas_add_from_file(&atlas, "res/unispace.ttf", 16, 0);
+    font = nk_font_atlas_add_from_file(&atlas, "res/unispace.ttf", 16, 0);
     image.image_data = (unsigned char*) nk_font_atlas_bake(&atlas, &image.width, &image.height, NK_FONT_ATLAS_RGBA32);
     image.nchannels = 4;
     tex.img = image;
     texture_create(&tex, FALSE, GL_LINEAR);
     nk_font_atlas_end(&atlas, nk_handle_id((int)tex.ID), &tex_null);
 
-    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex.ID);
 
-    struct nk_context ctx;
     if(!nk_init_default(&ctx, &font->handle)) {
         printf("Failed to initialize nk context!\n");
         nk_font_atlas_clear(&atlas);
         glfwTerminate();
         return 2;
     }
-
 
 
     while(!glfwWindowShouldClose(window)) {
@@ -255,6 +269,19 @@ int main(int argc, char **argv) {
 
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+
+        double cursor_x, cursor_y;
+        glfwGetCursorPos(window, &cursor_x, &cursor_y);
+        int left_button_state = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
+        nk_input_begin(&ctx);
+        nk_input_motion(&ctx, (int) cursor_x, (int) cursor_y);
+        if(left_button_state == GLFW_PRESS) {
+            nk_input_button(&ctx, NK_BUTTON_LEFT, (int) cursor_x, (int) cursor_y, true);
+        }
+        nk_input_end(&ctx);
+
+
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
         if(resolution[0] != width || resolution[1] != height) {
