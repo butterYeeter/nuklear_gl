@@ -4,7 +4,11 @@ layout(location = 1) in vec2 aUV;
 
 out vec2 uv;
 
+// uniform ivec2 res;
+
 void main(){
-    gl_Position = vec4(aPos, 0.0, 1.0);
+    // vec2 resf = vec2(res);
+    // float x = aPos.x * resf.x / resf.y;
+    gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);
     uv = aUV;
 }

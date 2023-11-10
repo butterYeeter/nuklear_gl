@@ -1,17 +1,34 @@
 #include "../include/glad/glad.h"
 #include "../include/GLFW/glfw3.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../include/stb_image.h"
+
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_STANDARD_BOOL
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_FONK_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_UINT_DRAW_INDEX
+#define NK_IMPLEMENTATION
+#include "../include/nuklear.h"
+
 
 // typedef struct {
 //     GLuint id;
 //     unsigned int *pnames;
 //     unsigned int *params;
 // } Texture;
+
+int resolution[] = {800, 800};
 
 GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
     FILE *shader_file;
@@ -51,13 +68,41 @@ GLuint create_shader(const char *shader_path, const unsigned int shader_type) {
     return shader_id;
 }
 
-int main() {
+void upload_uniform2i(const GLuint program, const char *name, const int v0, const int v1) {
+    int location = glGetUniformLocation(program, name);
+    glUseProgram(program);
+    glUniform2i(program, v0, v1);
+
+    int res[2];
+    // glGetUniformiv(program, location, res);
+    // printf("WIDTH: %dpx, HEIGHT: %dpx\n", res[0], res[1]);
+}
+
+
+void upload_uniform1f(const GLuint program, const char *name, const float v0) {
+    glUseProgram(program);
+    GLint location = glGetUniformLocation(program, name);
+    glUniform1f(program, v0);
+
+    float res;
+    glGetUniformfv(program, location, &res);
+    printf("val: %f\n", res);
+}
+
+
+int main(int argc, char **argv) {
+    char cwd[512];
+    getcwd(cwd, 256);
+    char slash = '/';
+    strncat(cwd, &slash, 1);
+    strcat(cwd, argv[0]);
+    printf("%s\n", cwd);
+
     glfwInit();
-    // glfwWindowHint(GLFW_DECORATED, GL_FALSE);
-    // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow *window = glfwCreateWindow(800, 800, "Hello World", NULL, NULL);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    GLFWwindow *window = glfwCreateWindow(resolution[0], resolution[1], "Hello World", NULL, NULL);
+    assert(window != NULL);
     glfwMakeContextCurrent(window);
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         printf("FAILED TO LOAD GL FUNCTIONS!\n");
@@ -120,29 +165,43 @@ int main() {
     int w, h, n;
     stbi_set_flip_vertically_on_load(true);
     unsigned char *data = stbi_load("res/dice.png", &w, &h, &n, 0);
-    n = 2;
     unsigned int format;
-    (n == 4) ? format = GL_RGBA : (n==3) ? format = GL_RGB : (format = 0);
+    (n == 4) ? format = GL_RGBA : (n==3) ? format = GL_RGB : (format);
 
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
     stbi_image_free(data);
 
 
+    float last_time = glfwGetTime();
     while(!glfwWindowShouldClose(window)) {
+        // upload_uniform2i(shader_program, "res", resolution[0], resolution[1]);
         glClearColor(0.0f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
+        float time = glfwGetTime();
+        int location = glGetUniformLocation(shader_program, "time");
+        glUniform1f(location, time);
+        // upload_uniform1f(shader_program, "time", dt);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+        if(resolution[0] != width || resolution[1] != height) {
+            glViewport(0,0,width,height);
+            resolution[0] = width;
+            resolution[1] = height;
+            // printf("resolution changed!\n");
+        }
     }
 
     glfwTerminate();
