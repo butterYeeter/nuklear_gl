@@ -19,12 +19,14 @@
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
+#define NK_UINT_DRAW_INDEX
 #define NK_IMPLEMENTATION
 #include <nuklear.h>
 
-typedef int Bool;
 #define TRUE 1
 #define FALSE 0
+#define MAX_VERTEX_MEMORY 512 * 1024
+#define MAX_ELEMENT_MEMORY 128 * 1024
 
 typedef struct {
     unsigned char *image_data;
@@ -44,6 +46,7 @@ typedef struct {
     unsigned char col[4];
 } Vertex;
 
+typedef int Bool;
 
 int resolution[] = {800, 800};
 
@@ -191,15 +194,16 @@ int main(int argc, char **argv) {
     glBindVertexArray(vao);
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), NULL);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)(2*sizeof(float)));
     glEnableVertexAttribArray(1);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices,GL_DYNAMIC_DRAW);
+
 
     GLuint shader_program, vert_shader, frag_shader;
     vert_shader = create_shader("res/vert.glsl", GL_VERTEX_SHADER);
@@ -229,14 +233,10 @@ int main(int argc, char **argv) {
     struct nk_draw_null_texture tex_null;
     struct nk_font *font;
     struct nk_context ctx;
-    struct nk_convert_config cfg = {};
-    static const struct nk_draw_vertex_layout_element vertex_layout[] = {
-        {NK_VERTEX_POSITION, NK_FORMAT_FLOAT, NK_OFFSETOF(Vertex, pos)},
-        {NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT, NK_OFFSETOF(Vertex, uv)},
-        {NK_VERTEX_COLOR, NK_FORMAT_R8G8B8A8, NK_OFFSETOF(Vertex, col)},
-        {NK_VERTEX_LAYOUT_END}
-    };
 
+    /*********************************************************************************
+    NUKLEAR FONT BAKING
+    **********************************************************************************/
     nk_font_atlas_init_default(&atlas);
     nk_font_atlas_begin(&atlas);
     font = nk_font_atlas_add_from_file(&atlas, "res/unispace.ttf", 16, 0);
@@ -245,9 +245,11 @@ int main(int argc, char **argv) {
     tex.img = image;
     texture_create(&tex, FALSE, GL_LINEAR);
     nk_font_atlas_end(&atlas, nk_handle_id((int)tex.ID), &tex_null);
-
     glBindTexture(GL_TEXTURE_2D, tex.ID);
 
+    /*********************************************************************************
+    NUKLEAR CONTEXT INIT
+    **********************************************************************************/
     if(!nk_init_default(&ctx, &font->handle)) {
         printf("Failed to initialize nk context!\n");
         nk_font_atlas_clear(&atlas);
@@ -255,6 +257,44 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    
+    /*********************************************************************************
+    SETUP TO AQUIRE VERTEX AND ELEMENT BUFFER DATA FROM NUKLEAR
+    **********************************************************************************/
+    struct nk_convert_config cfg = {};
+    static const struct nk_draw_vertex_layout_element vertex_layout[] = {
+        {NK_VERTEX_POSITION, NK_FORMAT_FLOAT, NK_OFFSETOF(Vertex, pos)},
+        {NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT, NK_OFFSETOF(Vertex, uv)},
+        {NK_VERTEX_COLOR, NK_FORMAT_R8G8B8A8, NK_OFFSETOF(Vertex, col)},
+        {NK_VERTEX_LAYOUT_END}
+    };
+
+    cfg.shape_AA = NK_ANTI_ALIASING_ON;
+    cfg.line_AA = NK_ANTI_ALIASING_ON;
+    cfg.vertex_layout = vertex_layout;
+    cfg.vertex_size = sizeof(Vertex);
+    cfg.vertex_alignment = NK_ALIGNOF(Vertex);
+    cfg.circle_segment_count = 22;
+    cfg.curve_segment_count = 22;
+    cfg.arc_segment_count = 22;
+    cfg.global_alpha = 1.0f;
+    cfg.tex_null = tex_null;
+
+    struct nk_buffer cmds, verts, idx;
+    const struct nk_draw_command *cmd;
+    nk_buffer_init_default(&cmds);
+    nk_buffer_init_default(&verts);
+    nk_buffer_init_default(&idx);
+    nk_convert(&ctx, &cmds, &verts, &idx, &cfg);
+
+    nk_draw_foreach(cmd, &ctx, &cmds) {
+    if (!cmd->elem_count) continue;
+        //[...]
+    }
+
+    nk_buffer_free(&cmds);
+    nk_buffer_free(&verts);
+    nk_buffer_free(&idx);
 
     while(!glfwWindowShouldClose(window)) {
         // upload_uniform2i(shader_program, "res", resolution[0], resolution[1]);
@@ -288,7 +328,6 @@ int main(int argc, char **argv) {
             glViewport(0,0,width,height);
             resolution[0] = width;
             resolution[1] = height;
-            // printf("resolution changed!\n");
         }
 
         nk_clear(&ctx);
