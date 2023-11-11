@@ -178,16 +178,16 @@ int main(int argc, char **argv) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA);
     glEnable(GL_PROGRAM_POINT_SIZE);
 
-    float vertices[] = {
-        -0.5f, -0.5f,   0.0f, 0.0f,
-        0.5f, -0.5f,    1.0f, 0.0f,
-        0.5f, 0.5f,     1.0f, 1.0f,
-       -0.5f, 0.5f,   0.0f, 1.0f
-    };
+    // float vertices[] = {
+    //     -0.5f, -0.5f,   0.0f, 0.0f,
+    //     0.5f, -0.5f,    1.0f, 0.0f,
+    //     0.5f, 0.5f,     1.0f, 1.0f,
+    //    -0.5f, 0.5f,   0.0f, 1.0f
+    // };
 
-    GLuint indices[] = {
-        0,1,2,  0,2,3
-    };
+    // GLuint indices[] = {
+    //     0,1,2,  0,2,3
+    // };
 
     GLuint vao, vbo, ebo;
     glGenVertexArrays(1, &vao);
@@ -197,12 +197,14 @@ int main(int argc, char **argv) {
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), NULL);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)(2*sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(2*sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices,GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), (void*)(4*sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBufferData(GL_ARRAY_BUFFER, MAX_VERTEX_MEMORY, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_ELEMENT_MEMORY, NULL,GL_DYNAMIC_DRAW);
 
 
     GLuint shader_program, vert_shader, frag_shader;
@@ -280,21 +282,22 @@ int main(int argc, char **argv) {
     cfg.global_alpha = 1.0f;
     cfg.tex_null = tex_null;
 
-    struct nk_buffer cmds, verts, idx;
-    const struct nk_draw_command *cmd;
-    nk_buffer_init_default(&cmds);
-    nk_buffer_init_default(&verts);
-    nk_buffer_init_default(&idx);
-    nk_convert(&ctx, &cmds, &verts, &idx, &cfg);
+    // struct nk_buffer cmds, verts, idx;
+    // const struct nk_draw_command *cmd;
+    // const nk_draw_index *offset = NULL;
+    // nk_buffer_init_default(&cmds);
+    // nk_buffer_init_default(&verts);
+    // nk_buffer_init_default(&idx);
+    // nk_convert(&ctx, &cmds, &verts, &idx, &cfg);
 
-    nk_draw_foreach(cmd, &ctx, &cmds) {
-    if (!cmd->elem_count) continue;
-        //[...]
-    }
+    // nk_draw_foreach(cmd, &ctx, &cmds) {
+    // if (!cmd->elem_count) continue;
+    //     // [...]
+    // }
 
-    nk_buffer_free(&cmds);
-    nk_buffer_free(&verts);
-    nk_buffer_free(&idx);
+    // nk_buffer_free(&cmds);
+    // nk_buffer_free(&verts);
+    // nk_buffer_free(&idx);
 
     while(!glfwWindowShouldClose(window)) {
         // upload_uniform2i(shader_program, "res", resolution[0], resolution[1]);
@@ -321,6 +324,38 @@ int main(int argc, char **argv) {
         }
         nk_input_end(&ctx);
 
+        if(nk_begin(&ctx, "WOW", nk_rect(100, 100, 100, 100), NK_WINDOW_TITLE | NK_WINDOW_MOVABLE)) {
+            nk_layout_row_dynamic(&ctx, 30, 2);
+            nk_label(&ctx, "WOW", NK_TEXT_ALIGN_CENTERED);
+            nk_flags sl;
+        }
+        nk_end(&ctx);
+
+
+        struct nk_buffer cmds, verts, idx;
+        const struct nk_draw_command *cmd;
+        const nk_draw_index *offset = NULL;
+        void *vert, *elem;
+        vert = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+        elem = glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+        nk_buffer_init_default(&cmds);
+        nk_buffer_init_fixed(&verts, vert, MAX_VERTEX_MEMORY);
+        nk_buffer_init_fixed(&idx, elem, MAX_ELEMENT_MEMORY);
+        nk_convert(&ctx, &cmds, &verts, &idx, &cfg);
+        glUnmapBuffer(GL_ARRAY_BUFFER);
+        glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+
+        nk_draw_foreach(cmd, &ctx, &cmds) {
+        if (!cmd->elem_count) continue;
+            // glBindTexture
+            glDrawElements(GL_TRIANGLES, cmd->elem_count, GL_UNSIGNED_INT, offset);
+            offset += cmd->elem_count;
+        }
+        // FUCK THIS SHIT. BITCH AS LIBRARY
+
+        // nk_buffer_free(&cmds);
+        // nk_buffer_free(&verts);
+        // nk_buffer_free(&idx);
 
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
@@ -330,7 +365,10 @@ int main(int argc, char **argv) {
             resolution[1] = height;
         }
 
+
+
         nk_clear(&ctx);
+        nk_buffer_clear(&cmds);
     }
 
     
