@@ -2,6 +2,9 @@
 bin/*
 bin/main
 
+# vscode folder
+.vscode/*
+
 # Prerequisites
 *.d
 
